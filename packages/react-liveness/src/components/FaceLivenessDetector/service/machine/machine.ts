@@ -61,6 +61,14 @@ const CAMERA_ID_KEY = 'AmplifyLivenessCameraId';
 const DEFAULT_FACE_FIT_TIMEOUT = 7000;
 
 let responseStream: Promise<AsyncIterable<LivenessResponseStream>>;
+
+// Helper function to get selected device info
+const getSelectedDeviceInfo = (context: LivenessContext) => {
+  return context.videoAssociatedParams?.selectableDevices?.find(
+    (device) => device.deviceId === context.videoAssociatedParams?.selectedDeviceId
+  );
+};
+
 const responseStreamActor = async (callback: StreamActorCallback) => {
   try {
     const stream = await responseStream;
@@ -818,11 +826,7 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
       callMobileLandscapeWarningCallback: assign({
         errorState: () => LivenessErrorState.MOBILE_LANDSCAPE_ERROR,
       }),
-      getSelectedDeviceInfo: (context) => {
-        return context.videoAssociatedParams?.selectableDevices?.find(
-          (device) => device.deviceId === context.videoAssociatedParams?.selectedDeviceId
-        );
-      },
+      getSelectedDeviceInfo: (context) => getSelectedDeviceInfo(context),
       callUserCancelCallback: (context) => {
         const { onUserCancel } = context.componentProps || {};
         if (!onUserCancel) {
@@ -830,7 +834,7 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
         }
         
         try {
-          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
+          const deviceInfo = getSelectedDeviceInfo(context);
           onUserCancel(deviceInfo);
         } catch (error) {
           console.error('Error in onUserCancel callback:', error);
