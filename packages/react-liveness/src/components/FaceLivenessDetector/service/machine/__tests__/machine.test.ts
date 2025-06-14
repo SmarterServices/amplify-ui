@@ -664,6 +664,188 @@ describe('Liveness Machine', () => {
     });
   });
 
+  describe('device ID handling', () => {
+    // Save original implementation to restore after tests
+    let originalGetSelectedDeviceInfo: any;
+    
+    beforeEach(() => {
+      // Save the original implementation
+      originalGetSelectedDeviceInfo = livenessMachine.actions.getSelectedDeviceInfo;
+    });
+    
+    afterEach(() => {
+      // Restore the original implementation
+      livenessMachine.actions.getSelectedDeviceInfo = originalGetSelectedDeviceInfo;
+      jest.clearAllMocks();
+    });
+
+    it('should pass device info to onAnalysisComplete callback', async () => {
+      const mockDeviceInfo = {
+        deviceId: 'test-device-id',
+        groupId: 'test-group-id',
+        kind: 'videoinput',
+        label: 'Test Camera',
+      };
+      
+      // Mock the getSelectedDeviceInfo action to return our test device
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(mockDeviceInfo);
+      
+      // Mock onAnalysisComplete to resolve with a value
+      const mockOnAnalysisComplete = jest.fn().mockResolvedValue({ isLive: true });
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onAnalysisComplete: mockOnAnalysisComplete,
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Transition to the getLiveness state
+      service.send({ type: 'GET_LIVENESS' });
+      await flushPromises();
+      
+      // Verify the callback was called with the device info
+      expect(mockOnAnalysisComplete).toHaveBeenCalledWith(mockDeviceInfo);
+    });
+
+    it('should pass device info to onError callback', async () => {
+      const mockDeviceInfo = {
+        deviceId: 'test-device-id',
+        groupId: 'test-group-id',
+        kind: 'videoinput',
+        label: 'Test Camera',
+      };
+      
+      // Mock the getSelectedDeviceInfo action to return our test device
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(mockDeviceInfo);
+      
+      const mockOnError = jest.fn();
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onError: mockOnError,
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Simulate an error event
+      const testError = new Error('Test error');
+      service.send({ type: 'ERROR', data: { error: testError } });
+      
+      // Verify the callback was called with the error and device info
+      expect(mockOnError).toHaveBeenCalledWith(testError, mockDeviceInfo);
+    });
+
+    it('should handle missing device info gracefully', async () => {
+      // Mock getSelectedDeviceInfo to return undefined
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(undefined);
+      
+      const mockOnAnalysisComplete = jest.fn().mockResolvedValue({ isLive: true });
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onAnalysisComplete: mockOnAnalysisComplete,
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Transition to the getLiveness state
+      service.send({ type: 'GET_LIVENESS' });
+      await flushPromises();
+      
+      // Verify the callback was called with undefined device info
+      expect(mockOnAnalysisComplete).toHaveBeenCalledWith(undefined);
+    });
+
+    it('should pass device info to onUserCancel callback', async () => {
+      const mockDeviceInfo = {
+        deviceId: 'test-device-id',
+        groupId: 'test-group-id',
+        kind: 'videoinput',
+        label: 'Test Camera',
+      };
+      
+      // Mock the getSelectedDeviceInfo action to return our test device
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(mockDeviceInfo);
+      
+      const mockOnUserCancel = jest.fn();
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onUserCancel: mockOnUserCancel,
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Simulate user cancel event
+      service.send({ type: 'CANCEL' });
+      
+      // Verify the callback was called with the device info
+      expect(mockOnUserCancel).toHaveBeenCalledWith(mockDeviceInfo);
+    });
+
+    it('should pass device info to onUserTimeout callback', async () => {
+      const mockDeviceInfo = {
+        deviceId: 'test-device-id',
+        groupId: 'test-group-id',
+        kind: 'videoinput',
+        label: 'Test Camera',
+      };
+      
+      // Mock the getSelectedDeviceInfo action to return our test device
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(mockDeviceInfo);
+      
+      const mockOnUserTimeout = jest.fn();
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onUserTimeout: mockOnUserTimeout,
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Simulate timeout event
+      service.send({ type: 'TIMEOUT' });
+      
+      // Verify the callback was called with the device info
+      expect(mockOnUserTimeout).toHaveBeenCalledWith(mockDeviceInfo);
+    });
+
+    it('should fallback to onUserCancel when onUserTimeout is not provided', async () => {
+      const mockDeviceInfo = {
+        deviceId: 'test-device-id',
+        groupId: 'test-group-id',
+        kind: 'videoinput',
+        label: 'Test Camera',
+      };
+      
+      // Mock the getSelectedDeviceInfo action to return our test device
+      livenessMachine.actions.getSelectedDeviceInfo = jest.fn().mockReturnValue(mockDeviceInfo);
+      
+      const mockOnUserCancel = jest.fn();
+      const testMachine = livenessMachine.withContext({
+        ...livenessMachine.context,
+        componentProps: {
+          ...mockcomponentProps,
+          onUserCancel: mockOnUserCancel,
+          // No onUserTimeout provided
+        },
+      });
+      const service = interpret(testMachine).start();
+      
+      // Simulate timeout event
+      service.send({ type: 'TIMEOUT' });
+      
+      // Verify the fallback to onUserCancel was called with the device info
+      expect(mockOnUserCancel).toHaveBeenCalledWith(mockDeviceInfo);
+    });
+  });
+
   describe('uploading', () => {
     it('should reach waitForDisconnectEvent state after stopping video', async () => {
       (mockcomponentProps.onAnalysisComplete as jest.Mock).mockResolvedValue({

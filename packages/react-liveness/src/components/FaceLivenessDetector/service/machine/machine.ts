@@ -818,24 +818,61 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
       callMobileLandscapeWarningCallback: assign({
         errorState: () => LivenessErrorState.MOBILE_LANDSCAPE_ERROR,
       }),
+      getSelectedDeviceInfo: (context) => {
+        return context.videoAssociatedParams?.selectableDevices?.find(
+          (device) => device.deviceId === context.videoAssociatedParams?.selectedDeviceId
+        );
+      },
       callUserCancelCallback: (context) => {
-        context.componentProps!.onUserCancel?.();
+        const { onUserCancel } = context.componentProps || {};
+        if (!onUserCancel) {
+          return;
+        }
+        
+        try {
+          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
+          onUserCancel(deviceInfo);
+        } catch (error) {
+          console.error('Error in onUserCancel callback:', error);
+          // Don't rethrow to prevent state machine from getting stuck
+        }
       },
       callUserTimeoutCallback: (context) => {
-        const error = new Error(context.errorMessage ?? 'Client Timeout');
-        error.name = context.errorState!;
-        const livenessError: LivenessError = {
-          state: context.errorState!,
-          error: error,
-        };
-        context.componentProps!.onError?.(livenessError);
+        const { onUserTimeout, onUserCancel } = context.componentProps || {};
+        
+        // If no callback is provided, just return
+        if (!onUserTimeout && !onUserCancel) {
+          return;
+        }
+        
+        try {
+          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
+          
+          // Call onUserTimeout if provided, otherwise fallback to onUserCancel for backward compatibility
+          if (onUserTimeout) {
+            onUserTimeout(deviceInfo);
+          } else if (onUserCancel) {
+            onUserCancel(deviceInfo);
+          }
+        } catch (error) {
+          console.error('Error in user timeout callback:', error);
+          // Don't rethrow to prevent state machine from getting stuck
+        }
       },
       callErrorCallback: (context, event) => {
-        const livenessError: LivenessError = {
-          state: context.errorState!,
-          error: (event.data?.error as Error) || event.data,
-        };
-        context.componentProps!.onError?.(livenessError);
+        const { onError } = context.componentProps || {};
+        if (!onError) {
+          return;
+        }
+        
+        try {
+          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
+          const error = event.data?.error || new Error('Unknown error occurred during liveness check');
+          onError(error, deviceInfo);
+        } catch (error) {
+          console.error('Error in onError callback:', error);
+          // Don't rethrow to prevent infinite error loops
+        }
       },
       cleanUpResources: (context) => {
         const { freshnessColorEl } = context.freshnessColorAssociatedParams!;
@@ -949,13 +986,25 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
         const { videoConstraints } = context.videoAssociatedParams!;
 
         // Get initial stream to enumerate devices with non-empty labels
-        const existingDeviceId = getLastSelectedCameraId();
+        const { componentProps } = context;
+        const existingDeviceId = componentProps?.deviceId || getLastSelectedCameraId();
         const initialStream = await navigator.mediaDevices.getUserMedia({
           video: {
             ...videoConstraints,
-            ...(existingDeviceId ? { deviceId: existingDeviceId } : {}),
+            ...(existingDeviceId ? { deviceId: { exact: existingDeviceId } } : {}),
           },
           audio: false,
+        }).catch((error) => {
+          // If the provided deviceId is not found, fall back to default device selection
+          if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') {
+            return navigator.mediaDevices.getUserMedia({
+              video: {
+                ...videoConstraints,
+              },
+              audio: false,
+            });
+          }
+          throw error;
         });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const realVideoDevices = devices
@@ -1330,10 +1379,19 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
         livenessStreamProvider!.dispatchStopVideoEvent();
       },
       async getLiveness(context) {
-        const { onAnalysisComplete } = context.componentProps!;
-
-        // Get liveness result
-        await onAnalysisComplete();
+        const { onAnalysisComplete } = context.componentProps || {};
+        if (!onAnalysisComplete) {
+          return;
+        }
+        
+        try {
+          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
+          await onAnalysisComplete(deviceInfo);
+        } catch (error) {
+          console.error('Error in onAnalysisComplete callback:', error);
+          // Rethrow to allow the state machine to handle the error
+          throw error;
+        }
       },
     },
   }
