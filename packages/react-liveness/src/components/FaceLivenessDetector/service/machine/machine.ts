@@ -66,7 +66,8 @@ let responseStream: Promise<AsyncIterable<LivenessResponseStream>>;
 // Helper function to get selected device info
 export const getSelectedDeviceInfo = (context: LivenessContext) => {
   return context.videoAssociatedParams?.selectableDevices?.find(
-    (device) => device.deviceId === context.videoAssociatedParams?.selectedDeviceId
+    (device) =>
+      device.deviceId === context.videoAssociatedParams?.selectedDeviceId
   );
 };
 
@@ -208,7 +209,10 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
         actions: 'setDOMAndCameraDetails',
       },
       UPDATE_DEVICE_AND_STREAM: {
-        actions: 'updateDeviceAndStream',
+        actions: ['updateDeviceAndStream', 'callCameraChangeCallback'],
+      },
+      CAMERA_NOT_FOUND: {
+        actions: 'callCameraNotFoundCallback',
       },
       SERVER_ERROR: {
         target: 'error',
@@ -572,6 +576,48 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
           };
         },
       }),
+      callCameraChangeCallback: (context, event) => {
+        const { onCameraChange } = context.componentProps ?? {};
+        if (!onCameraChange) {
+          return;
+        }
+
+        try {
+          const newDeviceId = event.data?.newDeviceId as string;
+          const deviceInfo =
+            context.videoAssociatedParams?.selectableDevices?.find(
+              (device) => device.deviceId === newDeviceId
+            );
+
+          if (deviceInfo) {
+            onCameraChange(deviceInfo);
+          }
+        } catch (callbackError) {
+          // console.error('Error in onCameraChange callback:', callbackError);
+          // Don't rethrow to prevent state machine from getting stuck
+        }
+      },
+      callCameraNotFoundCallback: (context, event) => {
+        const { onCameraNotFound } = context.componentProps ?? {};
+        if (!onCameraNotFound) {
+          return;
+        }
+
+        try {
+          const requestedCamera = event.data?.requestedCamera as {
+            deviceId?: string;
+            deviceLabel?: string;
+          };
+          const fallbackDevice = event.data?.fallbackDevice as DeviceInfo;
+
+          if (requestedCamera && fallbackDevice) {
+            onCameraNotFound(requestedCamera, fallbackDevice);
+          }
+        } catch (callbackError) {
+          // console.error('Error in onCameraNotFound callback:', callbackError);
+          // Don't rethrow to prevent state machine from getting stuck
+        }
+      },
       drawStaticOval: (context) => {
         const { canvasEl, videoEl, videoMediaStream } =
           context.videoAssociatedParams!;
@@ -841,38 +887,38 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
       }),
       getSelectedDeviceInfo: (context) => getSelectedDeviceInfo(context),
       callUserCancelCallback: (context) => {
-        const { onUserCancel } = context.componentProps || {};
+        const { onUserCancel } = context.componentProps ?? {};
         if (!onUserCancel) {
           return;
         }
-        
+
         try {
           const deviceInfo = getSelectedDeviceInfo(context);
           onUserCancel(deviceInfo);
-        } catch (error) {
-          console.error('Error in onUserCancel callback:', error);
+        } catch (callbackError) {
+          // console.error('Error in onUserCancel callback:', callbackError);
           // Don't rethrow to prevent state machine from getting stuck
         }
       },
       callUserTimeoutCallback: (context) => {
-        const { onUserTimeout, onUserCancel } = context.componentProps || {};
-        
+        const { onUserTimeout, onUserCancel } = context.componentProps ?? {};
+
         // If no callback is provided, just return
         if (!onUserTimeout && !onUserCancel) {
           return;
         }
-        
+
         try {
-          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
-          
+          const deviceInfo = getSelectedDeviceInfo(context);
+
           // Call onUserTimeout if provided, otherwise fallback to onUserCancel for backward compatibility
           if (onUserTimeout) {
             onUserTimeout(deviceInfo);
           } else if (onUserCancel) {
             onUserCancel(deviceInfo);
           }
-        } catch (error) {
-          console.error('Error in user timeout callback:', error);
+        } catch (callbackError) {
+          // console.error('Error in user timeout callback:', callbackError);
           // Don't rethrow to prevent state machine from getting stuck
         }
       },
@@ -881,13 +927,15 @@ export const livenessMachine = createMachine<LivenessContext, LivenessEvent>(
         if (!onError) {
           return;
         }
-        
+
         try {
-          const deviceInfo = livenessMachine.actions.getSelectedDeviceInfo(context);
-          const error = event.data?.error || new Error('Unknown error occurred during liveness check');
+          const deviceInfo = getSelectedDeviceInfo(context);
+          const error: LivenessError =
+            (event.data?.error as LivenessError) ||
+            new Error('Unknown error occurred during liveness check');
           onError(error, deviceInfo);
-        } catch (error) {
-          console.error('Error in onError callback:', error);
+        } catch (callbackError) {
+          //  console.error('Error in onError callback:', callbackError);
           // Don't rethrow to prevent infinite error loops
         }
       },
