@@ -148,8 +148,14 @@ export const LivenessCameraModule = (
 
   // Update the device if the selectedDeviceId changes
   React.useEffect(() => {
-    if (selectedDeviceId && selectableDevices?.length) {
-      const device = selectableDevices.find(d => d.deviceId === selectedDeviceId);
+    if (
+      selectedDeviceId &&
+      Array.isArray(selectableDevices) &&
+      selectableDevices.length > 0
+    ) {
+      const device = selectableDevices.find(
+        (d) => d.deviceId === selectedDeviceId
+      );
       if (device) {
         // Update the device in the state machine
         const changeCamera = async () => {
