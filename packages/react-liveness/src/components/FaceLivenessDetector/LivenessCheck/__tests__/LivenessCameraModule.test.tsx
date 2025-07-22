@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { when, resetAllWhenMocks } from 'jest-when';
 import { LivenessClassNames } from '../../types/classNames';
 
@@ -25,6 +25,7 @@ import {
 import { FaceMatchState } from '../../service';
 import { getDisplayText } from '../../utils/getDisplayText';
 import { selectIsRecordingStopped } from '../LivenessCheck';
+import { selectErrorState } from '../../shared';
 
 jest.mock('../../hooks');
 jest.mock('../../hooks/useLivenessSelector');
@@ -35,6 +36,15 @@ jest.mock('../../service');
 const mockUseLivenessActor = getMockedFunction(useLivenessActor);
 const mockUseLivenessSelector = getMockedFunction(useLivenessSelector);
 const mockUseMediaStreamInVideo = getMockedFunction(useMediaStreamInVideo);
+
+// Mock navigator.mediaDevices.getUserMedia
+const mockGetUserMedia = jest.fn();
+Object.defineProperty(global.navigator, 'mediaDevices', {
+  value: {
+    getUserMedia: mockGetUserMedia,
+  },
+  writable: true,
+});
 
 describe('LivenessCameraModule', () => {
   const mockActorState: any = {
@@ -56,6 +66,23 @@ describe('LivenessCameraModule', () => {
   } = getDisplayText(undefined);
   const { cancelLivenessCheckText, recordingIndicatorText } = streamDisplayText;
 
+  const mockVideoConstraints = {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    facingMode: 'user',
+  };
+
+  const mockSelectableDevices = [
+    { deviceId: 'device-1', label: 'Camera 1' },
+    { deviceId: 'device-2', label: 'Camera 2' },
+    { deviceId: 'device-3', label: 'Camera 3' },
+  ];
+
+  const mockMediaStream = {
+    getTracks: jest.fn(() => []),
+    getVideoTracks: jest.fn(() => []),
+  };
+
   function mockStateMatchesAndSelectors() {
     when(mockActorState.matches)
       .calledWith('cameraCheck')
@@ -64,8 +91,18 @@ describe('LivenessCameraModule', () => {
       .mockReturnValue(isNotRecording)
       .calledWith('start')
       .mockReturnValue(isStart)
+      .calledWith('userCancel')
+      .mockReturnValue(false)
+      .calledWith('waitForDOMAndCameraDetails')
+      .mockReturnValue(false)
+      .calledWith('detectFaceBeforeStart')
+      .mockReturnValue(false)
       .calledWith('recording')
-      .mockReturnValue(isRecording);
+      .mockReturnValue(isRecording)
+      .calledWith('checkSucceeded')
+      .mockReturnValue(false)
+      .calledWith({ recording: 'flashFreshnessColors' })
+      .mockReturnValue(false);
   }
 
   beforeEach(() => {
@@ -77,6 +114,7 @@ describe('LivenessCameraModule', () => {
       videoHeight: 100,
       videoWidth: 100,
     });
+    mockGetUserMedia.mockResolvedValue(mockMediaStream);
   });
 
   afterEach(() => {
@@ -133,7 +171,9 @@ describe('LivenessCameraModule', () => {
       screen.getByRole('button', { name: cancelLivenessCheckText })
     ).toBeInTheDocument();
 
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     expect(screen.queryByTestId('centered-loader')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Countdown timer')).toBeInTheDocument();
@@ -169,7 +209,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     expect(screen.getByTestId('rec-icon')).toBeInTheDocument();
     expect(screen.getByText(recordingIndicatorText)).toBeInTheDocument();
@@ -197,7 +239,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     const cameraModule = await screen.findByTestId(testId);
     const matchIndicator = cameraModule.getElementsByClassName(
@@ -228,7 +272,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     const cameraModule = await screen.findByTestId(testId);
     const matchIndicator = cameraModule.getElementsByClassName(
@@ -259,7 +305,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     const cameraModule = await screen.findByTestId(testId);
     const matchIndicator = cameraModule.getElementsByClassName(
@@ -290,7 +338,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     const cameraModule = await screen.findByTestId(testId);
     const matchIndicator = cameraModule.getElementsByClassName(
@@ -321,7 +371,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     const cameraModule = await screen.findByTestId(testId);
     const matchIndicator = cameraModule.getElementsByClassName(
@@ -421,7 +473,9 @@ describe('LivenessCameraModule', () => {
       />
     );
     const videoEl = screen.getByTestId('video');
-    videoEl.dispatchEvent(new Event('canplay'));
+    act(() => {
+      videoEl.dispatchEvent(new Event('canplay'));
+    });
 
     expect(screen.getByTestId('popover-icon')).toBeInTheDocument();
   });
@@ -438,5 +492,360 @@ describe('LivenessCameraModule', () => {
     const isRecordingStopped = selectIsRecordingStopped(state);
 
     expect(isRecordingStopped).toEqual(true);
+  });
+
+  describe('Camera Device Switching', () => {
+    beforeEach(() => {
+      isStart = true;
+      mockStateMatchesAndSelectors();
+    });
+
+    it('should render camera selection dropdown when multiple devices are available on desktop', () => {
+      // Create a more robust selector mock that handles multiple calls
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      // Should render the camera selection dropdown
+      expect(screen.getByLabelText('Camera')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Camera 1')).toBeInTheDocument();
+
+      // Should have all device options
+      mockSelectableDevices.forEach((device) => {
+        expect(screen.getByText(device.label)).toBeInTheDocument();
+      });
+    });
+
+    it('should not render camera selection dropdown on mobile screens', () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={true}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      // Should not render camera selection on mobile
+      expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+    });
+
+    it('should not render camera selection when only one device is available', () => {
+      const singleDevice = [{ deviceId: 'device-1', label: 'Camera 1' }];
+
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return singleDevice;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      // Should not render camera selection when only one device
+      expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+    });
+
+    it('should call getUserMedia with correct constraints when camera changes', async () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      const cameraSelect = screen.getByLabelText('Camera');
+
+      // Simulate changing camera to device-2
+      fireEvent.change(cameraSelect, { target: { value: 'device-2' } });
+
+      await waitFor(() => {
+        expect(mockGetUserMedia).toHaveBeenCalledWith({
+          video: {
+            ...mockVideoConstraints,
+            deviceId: { exact: 'device-2' },
+          },
+          audio: false,
+        });
+      });
+    });
+
+    it('should dispatch UPDATE_DEVICE_AND_STREAM action when camera changes successfully', async () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      const cameraSelect = screen.getByLabelText('Camera');
+
+      // Simulate changing camera to device-2
+      fireEvent.change(cameraSelect, { target: { value: 'device-2' } });
+
+      await waitFor(() => {
+        expect(mockActorSend).toHaveBeenCalledWith({
+          type: 'UPDATE_DEVICE_AND_STREAM',
+          data: {
+            newDeviceId: 'device-2',
+            newStream: mockMediaStream,
+          },
+        });
+      });
+    });
+
+    it('should call getUserMedia when camera changes and handle async operations', async () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-1';
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      const cameraSelect = screen.getByLabelText('Camera');
+
+      // Simulate changing camera to device-2
+      fireEvent.change(cameraSelect, { target: { value: 'device-2' } });
+
+      // Should attempt to call getUserMedia with correct constraints
+      await waitFor(() => {
+        expect(mockGetUserMedia).toHaveBeenCalledWith({
+          video: {
+            ...mockVideoConstraints,
+            deviceId: { exact: 'device-2' },
+          },
+          audio: false,
+        });
+      });
+
+      // The component should remain functional
+      expect(screen.getByLabelText('Camera')).toBeInTheDocument();
+      expect(screen.getByTestId('video')).toBeInTheDocument();
+    });
+
+    it('should update device when selectedDeviceId changes via useEffect', async () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'device-2'; // selectedDeviceId changed
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      await waitFor(() => {
+        expect(mockGetUserMedia).toHaveBeenCalledWith({
+          video: {
+            ...mockVideoConstraints,
+            deviceId: { exact: 'device-2' },
+          },
+          audio: false,
+        });
+      });
+
+      await waitFor(() => {
+        expect(mockActorSend).toHaveBeenCalledWith({
+          type: 'UPDATE_DEVICE_AND_STREAM',
+          data: {
+            newDeviceId: 'device-2',
+            newStream: mockMediaStream,
+          },
+        });
+      });
+    });
+
+    it('should not attempt camera change when selectedDeviceId is not found in selectableDevices', async () => {
+      mockUseLivenessSelector.mockImplementation((selector) => {
+        if (selector === selectVideoStream) return mockMediaStream;
+        if (selector === selectVideoConstraints) return mockVideoConstraints;
+        if (selector === selectSelectedDeviceId) return 'non-existent-device'; // Device not in selectableDevices
+        if (selector === selectSelectableDevices) return mockSelectableDevices;
+        if (selector === selectFaceMatchPercentage) return 25;
+        if (selector === selectFaceMatchState)
+          return FaceMatchState.FACE_IDENTIFIED;
+        if (selector === selectErrorState) return null;
+        return undefined;
+      });
+
+      renderWithLivenessProvider(
+        <LivenessCameraModule
+          isMobileScreen={false}
+          isRecordingStopped={false}
+          hintDisplayText={hintDisplayText}
+          streamDisplayText={streamDisplayText}
+          errorDisplayText={errorDisplayText}
+          cameraDisplayText={cameraDisplayText}
+          instructionDisplayText={instructionDisplayText}
+        />
+      );
+
+      const videoEl = screen.getByTestId('video');
+      act(() => {
+        videoEl.dispatchEvent(new Event('canplay'));
+      });
+
+      // Should not call getUserMedia or send UPDATE_DEVICE_AND_STREAM for non-existent device
+      await waitFor(
+        () => {
+          expect(mockGetUserMedia).not.toHaveBeenCalled();
+          expect(mockActorSend).not.toHaveBeenCalledWith({
+            type: 'UPDATE_DEVICE_AND_STREAM',
+            data: expect.any(Object),
+          });
+        },
+        { timeout: 1000 }
+      );
+    });
   });
 });
