@@ -33,6 +33,7 @@ export default function LivenessDefault({
   } = useLiveness(challengeType);
 
   if (createLivenessSessionApiError) {
+    console.log('createLivenessSessionApiError', createLivenessSessionApiError);
     return <div>Some error occurred...</div>;
   }
 

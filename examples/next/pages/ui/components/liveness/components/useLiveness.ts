@@ -28,11 +28,13 @@ export function useLiveness(challengeType: string) {
   } = useSWR(
     'CreateStreamingLivenessSession',
     async () => {
+      console.log('Came here ');
       const response = await post({
         apiName: 'BYOB',
         path: `/livenessnolight/create?challengeType=${challengeType}`,
         options: {},
       }).response;
+      console.log('Response', response);
       const { body } = response;
 
       const systemClockOffset = getSystemClockOffset(response.headers['date']);
